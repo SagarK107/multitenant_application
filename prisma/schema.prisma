@@ -1,0 +1,91 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  
+}
+
+// ============================================
+// Multi-Tenant Models
+// ============================================
+
+/// Represents a user in the system
+/// Users are global across all organizations
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  password  String?  // Nullable for OAuth users
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  memberships Membership[]
+
+  @@index([email])
+}
+
+/// Represents an organization (tenant)
+/// Each organization is a separate tenant with isolated data
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  logo      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  memberships Membership[]
+  projects    Project[]
+
+  @@index([slug])
+}
+
+/// Represents membership: the relationship between Users and Organizations
+/// Enables multi-tenancy by associating users with organizations and roles
+model Membership {
+  id             String   @id @default(cuid())
+  role           Role     @default(MEMBER)
+  joinedAt       DateTime @default(now())
+  
+  // Foreign keys
+  userId         String
+  organizationId String
+  
+  // Relations
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([userId, organizationId])
+  @@index([userId])
+  @@index([organizationId])
+}
+
+model Project {
+  id        String   @id @default(uuid())
+  name      String
+  orgId     String
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+/// Enum for organization roles
+enum Role {
+  OWNER   // Full access, can manage organization and members
+  ADMIN   // Can manage members and organization settings
+  MEMBER  // Can access resources within organization
+  GUEST   // Read-only access
+}
